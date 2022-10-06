@@ -42,53 +42,39 @@ class YoutubeDL():
         self.downloadFile(youtubeURL, self.ydl_video_opts)
 
     def downloadAudio(self, youtubeURL:str):
-        self.setMetaData(youtubeURL)
+        metaData = self.downloadFile(youtubeURL, self.ydl_audio_opts)
+        if "list" in youtubeURL:
+            self.setMetaData(metaData, True)
+        else:
+            self.setMetaData(metaData)
 
-    def downoladPlaylistVideo(self):
+    def downoladConfigPlaylistVideo(self):
         for playlistURL in self.playlistList:
             self.downloadFile(playlistURL, self.ydl_video_opts)
 
-    def downoladPlaylistAudio(self):
+    def downoladConfigPlaylistAudio(self):
         for playlistURL in self.playlistList:
-            self.setMetaData(playlistURL)
+            metaData = self.downloadFile(playlistURL, self.ydl_audio_opts)
+            self.setMetaData(metaData, True)
     
-    def setMetaData(self, youtubeURL):
-        metaData = self.downloadFile(youtubeURL, self.ydl_audio_opts)
-        if 'list' in youtubeURL:
-            albumName = metaData["title"]
+    def setMetaData(self, metaData, isPlaylist=False):
+        if isPlaylist:
+            playlistName = metaData["title"]
             for track in metaData['entries']:
-                self.saveMataDataToFile(track, albumName)
-                # metaDataTrackDict = self.getMetaDataDict(track)
-                # metaDataTrackDict['title'] = title
-                # path = f'{self.savePath}/{track["title"]}.mp3'
-                # audio = EasyID3(path)
-                # audio['tracknumber'] = str(track['playlist_index'])
-                # for data in metaDataTrackDict:
-                #     audio[data] = track[data]
-                # audio.save()
-                # audioInfo = MP3(path, ID3=EasyID3)
-                # print(audioInfo.pprint())
+                self.saveMataDataToFile(track, playlistName)
         else:
             self.saveMataDataToFile(metaData)
-            # metaDataDict = self.getMetaDataDict(metaData)
-            # path = f'{self.savePath}/{metaDataDict["title"]}.mp3'
-            # audio = EasyID3(path)
-            # for data in metaDataDict:
-            #     audio[data] = metaDataDict[data]
-            # audio.save()
-            # audioInfo = MP3(path, ID3=EasyID3)
-            # print(audioInfo.pprint())
     
-    def saveMataDataToFile(self, metaData, albumName=None):
-        # print(metaData)
+    def saveMataDataToFile(self, metaData, playlistName=None):
+        print(metaData)
         metaDataDict = self.getMetaDataDict(metaData)
         path = f'{self.savePath}/{metaDataDict["title"]}.mp3'
         audio = EasyID3(path)
         for data in metaDataDict:
             audio[data] = metaDataDict[data]
-        audio['tracknumber'] = str(metaData['playlist_index'])
-        if albumName != None:
-            audio['album'] = albumName
+        if playlistName != None:
+            audio['album'] = playlistName
+            audio['tracknumber'] = str(metaData['playlist_index'])
         audio.save()
         audioInfo = MP3(path, ID3=EasyID3)
         print(audioInfo.pprint())
@@ -110,22 +96,54 @@ if __name__ == "__main__":
     help="Path to the config file --> default youtube_config.ini")
     args = parser.parse_args()
     link = args.link
+    # print()
+    # print(30*"-")
+    # print(link)
+    # print(30*"-")
     type = args.type
     config= args.config
     youtubeDL = YoutubeDL(config, type)
     if link == None:
         if type == "mp3":
-            youtubeDL.downoladPlaylistAudio()
+            youtubeDL.downoladConfigPlaylistAudio()
         else:
-            youtubeDL.downoladPlaylistVideo()
+            youtubeDL.downoladConfigPlaylistVideo()
     else:
-        if type == "mp3":
-            youtubeDL.downloadAudio(link)
-        else:
-            youtubeDL.dowloadVideo(link)
+        splitedLink = link.split("=")
+        videoHash = splitedLink[1]
+        if "list=" not in link:
+            if type == "mp3":
+                youtubeDL.downloadAudio(videoHash)
+            else:
+                youtubeDL.dowloadVideo(videoHash)
+        elif "list=" in link:
+            videoHash = videoHash[:videoHash.index("&")]
+            playlistHash = splitedLink[2][:splitedLink[2].index("&")]
+            playlistInput = input("""
+            Playlist link detected. 
+            If you want to download whole playlist press 'y'
+            If you want to download single video/audio press 'n'
+            """)
+            while True:
+                if playlistInput == "y" or playlistInput == "n":
+                    break
+                else:
+                    playlistInput = input("""
+                WRONG VALUE
+                Press 'y' to downolad playlist or 'no' to download single video/audio
+                    """)
+            if playlistInput == "n":
+                hashToDownload = videoHash
+            else:
+                hashToDownload = playlistHash
+            if type == "mp3":
+                youtubeDL.downloadAudio(hashToDownload)
+            else:
+                youtubeDL.dowloadVideo(hashToDownload)
 
-#mkv mają napisy różne i nawet różne funkcje audio
-# można dodać track number z playlisy i album wtedy nazywa się playlista
-# pobieranie całej playlisty, ogarnąć
-# rozszerzenia się pobawić, zobaczyć w docsach info o ext, żeby dowiedzieć się w jakim formacie został pobrany plik
-# poczytać flask bootstrap
+
+# zrobić walidace linków w maine, splitować link i odpalać odpowiednio pobieranie playlisty albo jednego utworu, tylko po haszu video ściągać nie po całym linku, jeśli link jest nie prawidłowy to wywalić
+# komunikat z błędem
+# jeśli jest v= to pobiera jeden plik
+# jeśli jest lista i watch to można zapytanie zrobi, typu co mam zrobić pobtać wideo jedno czy playliste
+# może być tak że kilka stron może mieć to samo IP ale musi mieć wtedy różny port, IP + port musi być unikatowy, IP odności się do urządzenia a na jednym urządzniu możę być więcej serwerów o róznych portach
