@@ -1,6 +1,7 @@
 import yt_dlp
 import configparser
 import argparse
+import sys
 from enum import Enum
 from mutagen.easyid3 import EasyID3
 from mutagen.mp3 import MP3
@@ -35,13 +36,33 @@ class YoutubeDL():
         }
     
     def downloadFile(self, youtubeURL:str, youtubeOptions:dict):
+        """Method used to download youtube media based on URL
+
+        Args:
+            youtubeURL (str): YouTube URL
+            youtubeOptions (dict): YouTube options dict form init
+
+        Returns:
+            class: meta data form youtube
+        """
         with yt_dlp.YoutubeDL(youtubeOptions) as ydl:
             return ydl.extract_info(youtubeURL)
 
     def dowloadVideo(self, youtubeURL:str):
+        """Method uded to download video type from YouTube
+
+        Args:
+            youtubeURL (str): YouTube URL
+        """
         self.downloadFile(youtubeURL, self.ydl_video_opts)
 
     def downloadAudio(self, youtubeURL:str):
+        """Method uded to download audio type from Youtube, convert metadata 
+        into mp3 format used mutagen.easyid3
+
+        Args:
+            youtubeURL (str): YouTube URL
+        """
         metaData = self.downloadFile(youtubeURL, self.ydl_audio_opts)
         if "list" in youtubeURL:
             self.setMetaData(metaData, True)
@@ -49,15 +70,25 @@ class YoutubeDL():
             self.setMetaData(metaData)
 
     def downoladConfigPlaylistVideo(self):
+        """Method used to dowload all playlists added to cofig file - type video
+        """
         for playlistURL in self.playlistList:
             self.downloadFile(playlistURL, self.ydl_video_opts)
 
     def downoladConfigPlaylistAudio(self):
+        """Method used to dowload all playlists added to cofig file - type audio
+        """
         for playlistURL in self.playlistList:
             metaData = self.downloadFile(playlistURL, self.ydl_audio_opts)
             self.setMetaData(metaData, True)
     
     def setMetaData(self, metaData, isPlaylist=False):
+        """Method uded to set metadata and convert it into mp3 format
+
+        Args:
+            metaData (str???): Metadata form YouTube
+            isPlaylist (bool, optional): Boolien True if YouTube is a playlist. Defaults to False.
+        """
         if isPlaylist:
             playlistName = metaData["title"]
             for track in metaData['entries']:
@@ -66,6 +97,12 @@ class YoutubeDL():
             self.saveMataDataToFile(metaData)
     
     def saveMataDataToFile(self, metaData, playlistName=None):
+        """Method used to save metadata into mp3 audio format file
+
+        Args:
+            metaData (str???): Metadata from YouTube
+            playlistName (str, optional): Name of the playlist. Defaults to None.
+        """
         print(metaData)
         metaDataDict = self.getMetaDataDict(metaData)
         path = f'{self.savePath}/{metaDataDict["title"]}.mp3'
@@ -80,6 +117,14 @@ class YoutubeDL():
         print(audioInfo.pprint())
 
     def getMetaDataDict(self, metaData):
+        """Method returns metadata dict based on metadata taken form Youtube video
+
+        Args:
+            metaData (str): Metadata
+
+        Returns:
+            dict: Metadata dict from YouTube
+        """
         metaDataDict = {}
         for data in MetaDataType:
             if data.value in metaData:
@@ -96,10 +141,6 @@ if __name__ == "__main__":
     help="Path to the config file --> default youtube_config.ini")
     args = parser.parse_args()
     link = args.link
-    # print()
-    # print(30*"-")
-    # print(link)
-    # print(30*"-")
     type = args.type
     config= args.config
     youtubeDL = YoutubeDL(config, type)
@@ -108,38 +149,38 @@ if __name__ == "__main__":
             youtubeDL.downoladConfigPlaylistAudio()
         else:
             youtubeDL.downoladConfigPlaylistVideo()
-    else:
-        splitedLink = link.split("=")
-        videoHash = splitedLink[1]
-        if "list=" not in link:
-            if type == "mp3":
-                youtubeDL.downloadAudio(videoHash)
+        sys.exit()
+    splitedLink = link.split("=")
+    videoHash = splitedLink[1]
+    if "list=" not in link:
+        if type == "mp3":
+            youtubeDL.downloadAudio(videoHash)
+        else:
+            youtubeDL.dowloadVideo(videoHash)
+    elif "list=" in link:
+        videoHash = videoHash[:videoHash.index("&")]
+        playlistHash = splitedLink[2][:splitedLink[2].index("&")]
+        playlistInput = input("""
+        Playlist link detected. 
+        If you want to download whole playlist press 'y'
+        If you want to download single video/audio press 'n'
+        """)
+        while True:
+            if playlistInput == "y" or playlistInput == "n":
+                break
             else:
-                youtubeDL.dowloadVideo(videoHash)
-        elif "list=" in link:
-            videoHash = videoHash[:videoHash.index("&")]
-            playlistHash = splitedLink[2][:splitedLink[2].index("&")]
-            playlistInput = input("""
-            Playlist link detected. 
-            If you want to download whole playlist press 'y'
-            If you want to download single video/audio press 'n'
-            """)
-            while True:
-                if playlistInput == "y" or playlistInput == "n":
-                    break
-                else:
-                    playlistInput = input("""
-                WRONG VALUE
-                Press 'y' to downolad playlist or 'no' to download single video/audio
-                    """)
-            if playlistInput == "n":
-                hashToDownload = videoHash
-            else:
-                hashToDownload = playlistHash
-            if type == "mp3":
-                youtubeDL.downloadAudio(hashToDownload)
-            else:
-                youtubeDL.dowloadVideo(hashToDownload)
+                playlistInput = input("""
+            WRONG VALUE
+            Press 'y' to downolad playlist or 'no' to download single video/audio
+                """)
+        if playlistInput == "n":
+            hashToDownload = videoHash
+        else:
+            hashToDownload = playlistHash
+        if type == "mp3":
+            youtubeDL.downloadAudio(hashToDownload)
+        else:
+            youtubeDL.dowloadVideo(hashToDownload)
 
 
 # zrobić walidace linków w maine, splitować link i odpalać odpowiednio pobieranie playlisty albo jednego utworu, tylko po haszu video ściągać nie po całym linku, jeśli link jest nie prawidłowy to wywalić
