@@ -10,6 +10,7 @@ class MetaDataType(Enum):
     TITLE = 'title'
     ALBUM = 'album'
     ARTIST = 'artist'
+    PLAYLIST_INDEX = 'playlist_index'
 
 
 class YoutubeDL():
@@ -65,7 +66,10 @@ class YoutubeDL():
             youtubeURL (str): YouTube URL
         """
         metaData = self.downloadFile(youtubeURL, self.ydl_audio_opts)
-        self.setMetaData(metaData, isPlaylist)
+        if isPlaylist:
+            self.setMetaDataPlaylist(metaData)
+        else:
+            self.setMetaDataSingleFile(metaData)
 
     def downoladConfigPlaylistVideo(self):
         """Method used to dowload all playlists added to cofig file - type video
@@ -80,38 +84,40 @@ class YoutubeDL():
         for playlistURL in self.playlistList:
             playlistHash = playlistURL[playlistURL.index("=") + 1:]
             metaData = self.downloadFile(playlistHash, self.ydl_audio_opts)
-            self.setMetaData(metaData, True)
-    
-    def setMetaData(self, metaData, isPlaylist):
-        """Method uded to set metadata and convert it into mp3 format
+            self.setMetaDataPlaylist(metaData)
 
-        Args:
-            metaData (dict): Metadata form YouTube
-            isPlaylist (bool, optional): Boolien True if YouTube is a playlist. Defaults to False.
-        """
-        if isPlaylist:
-            playlistName = metaData["title"]
-            for trackMetaData in metaData['entries']:
-                self.saveMataDataToFile(trackMetaData, playlistName)
-        else:
-            self.saveMataDataToFile(metaData)
-    
-    def saveMataDataToFile(self, metaData, playlistName=None):
-        """Method used to save metadata into mp3 audio format file
-
-        Args:
-            metaData (dict): Metadata from YouTube
-            playlistName (str, optional): Name of the playlist. Defaults to None.
-        """
-        # print(metaData)
+    def setMetaDataSingleFile(self, metaData):
         metaDataDict = self.getMetaDataDict(metaData)
         path = f'{self.savePath}/{metaDataDict["title"]}.mp3'
+        self.saveMetaDataToSingleFile(metaDataDict, path)
+    
+    def setMetaDataPlaylist(self, metaData):
+        playlistName = metaData["title"]
+        for trackMetaData in metaData['entries']:
+            metaDataDict = self.getMetaDataDict(trackMetaData)
+            path = f'{self.savePath}/{metaDataDict["title"]}.mp3'
+            self.saveMataDataToPlaylist(metaDataDict, path, playlistName, trackMetaData)
+            
+    def saveMetaDataToSingleFile(self, metaDataDict, path):
+        audio = EasyID3(path)
+        print(metaDataDict)
+        for data in metaDataDict:
+            if data == "playlist_index":
+                audio['tracknumber'] = str(metaDataDict[data])
+                continue
+            audio[data] = metaDataDict[data]
+        audio.save()
+        audioInfo = MP3(path, ID3=EasyID3)
+        print(audioInfo.pprint())
+    
+    def saveMataDataToPlaylist(self, metaDataDict, path, playlistName, trackMetaData):
         audio = EasyID3(path)
         for data in metaDataDict:
+            if data == "playlist_index":
+                audio['tracknumber'] = str(metaDataDict[data])
+                continue
             audio[data] = metaDataDict[data]
-        if playlistName != None:
-            audio['album'] = playlistName
-            audio['tracknumber'] = str(metaData['playlist_index'])
+        audio['album'] = playlistName
         audio.save()
         audioInfo = MP3(path, ID3=EasyID3)
         print(audioInfo.pprint())
@@ -159,8 +165,6 @@ class TerminalUsage():
         If you want to download whole playlist press 'y'
         If you want to download single video/audio press 'n'
         """)
-        
-        # if userResponse != "y" or userResponse != "n":
         if userResponse not in ["y", "n"]:
             raise ValueError("Please enter 'y' for yes or 'n' for no")
         if userResponse == "n":
@@ -175,24 +179,26 @@ class TerminalUsage():
                 youtubeDL.downloadAudio(hashToDownload)
         else:
             youtubeDL.dowloadVideo(hashToDownload)
+    
 
     @classmethod
     def initFromLink(cls, youtubeDL, link):
         if link == None:
             return cls(youtubeDL, videoHash=None, playlistHash=None)
         onlyHashesInLink = link.split("?")[1]
-        if "&" not in onlyHashesInLink:
+        numberOfEqualSign = link.count("=")
+        if numberOfEqualSign >= 2:
+            splitedHashes = onlyHashesInLink.split("=")
+            videoHash = splitedHashes[1][:splitedHashes[1].index("&")]
+            playlistHash = splitedHashes[2][:splitedHashes[2].index("&")]
+            return cls(youtubeDL, videoHash=videoHash, playlistHash=playlistHash)
+        elif numberOfEqualSign == 1:
             if "list=" in onlyHashesInLink:
                 playlistHash = onlyHashesInLink[5:]
                 return cls(youtubeDL, videoHash=None, playlistHash=playlistHash)
             else:
                 videoHash = onlyHashesInLink[2:]
                 return cls(youtubeDL, videoHash=videoHash, playlistHash=None)
-        else:
-            splitedHashes = onlyHashesInLink.split("=")
-            videoHash = splitedHashes[1][:splitedHashes[1].index("&")]
-            playlistHash = splitedHashes[2][:splitedHashes[2].index("&")]
-            return cls(youtubeDL, videoHash=videoHash, playlistHash=playlistHash)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser("Program downloads mp3 form given youtube URL")
@@ -221,9 +227,9 @@ if __name__ == "__main__":
 
 # sprawdzić ile jest znaków równa się żeby nie rozdrabniać się na długie if statemanty
 # najpierw splitować zapytania znaki, potem & a potem równa się a 
-# zamiast while to wywalić błąd 
-# trucknumber dodać do Enum i weryfikować w loopie
-# dodać kolejną metode w której ustawiam metadaa setmetadataForPlaylist i setMetaDataForSingleFile
+# zamiast while to wywalić błąd DONE
+# trucknumber dodać do Enum i weryfikować w loopie DONE
+# dodać kolejną metode w której ustawiam metadaa setmetadataForPlaylist i setMetaDataForSingleFile DONE
 
 
 
