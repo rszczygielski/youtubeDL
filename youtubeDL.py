@@ -11,6 +11,7 @@ class MetaDataType(Enum):
     ALBUM = 'album'
     ARTIST = 'artist'
 
+
 class YoutubeDL():
     def __init__(self, configFilePath, type):
         config = configparser.ConfigParser()
@@ -56,7 +57,7 @@ class YoutubeDL():
         """
         self.downloadFile(youtubeURL, self.ydl_video_opts)
 
-    def downloadAudio(self, youtubeURL:str):
+    def downloadAudio(self, youtubeURL:str, isPlaylist=False):
         """Method uded to download audio type from Youtube, convert metadata 
         into mp3 format used mutagen.easyid3
 
@@ -64,35 +65,34 @@ class YoutubeDL():
             youtubeURL (str): YouTube URL
         """
         metaData = self.downloadFile(youtubeURL, self.ydl_audio_opts)
-        if "list" in youtubeURL:
-            self.setMetaData(metaData, True)
-        else:
-            self.setMetaData(metaData)
+        self.setMetaData(metaData, isPlaylist)
 
     def downoladConfigPlaylistVideo(self):
         """Method used to dowload all playlists added to cofig file - type video
         """
         for playlistURL in self.playlistList:
-            self.downloadFile(playlistURL, self.ydl_video_opts)
+            playlistHash = playlistURL[playlistURL.index("=") + 1:]
+            self.downloadFile(playlistHash, self.ydl_video_opts)
 
     def downoladConfigPlaylistAudio(self):
         """Method used to dowload all playlists added to cofig file - type audio
         """
         for playlistURL in self.playlistList:
-            metaData = self.downloadFile(playlistURL, self.ydl_audio_opts)
+            playlistHash = playlistURL[playlistURL.index("=") + 1:]
+            metaData = self.downloadFile(playlistHash, self.ydl_audio_opts)
             self.setMetaData(metaData, True)
     
-    def setMetaData(self, metaData, isPlaylist=False):
+    def setMetaData(self, metaData, isPlaylist):
         """Method uded to set metadata and convert it into mp3 format
 
         Args:
-            metaData (str???): Metadata form YouTube
+            metaData (dict): Metadata form YouTube
             isPlaylist (bool, optional): Boolien True if YouTube is a playlist. Defaults to False.
         """
         if isPlaylist:
             playlistName = metaData["title"]
-            for track in metaData['entries']:
-                self.saveMataDataToFile(track, playlistName)
+            for trackMetaData in metaData['entries']:
+                self.saveMataDataToFile(trackMetaData, playlistName)
         else:
             self.saveMataDataToFile(metaData)
     
@@ -100,10 +100,10 @@ class YoutubeDL():
         """Method used to save metadata into mp3 audio format file
 
         Args:
-            metaData (str???): Metadata from YouTube
+            metaData (dict): Metadata from YouTube
             playlistName (str, optional): Name of the playlist. Defaults to None.
         """
-        print(metaData)
+        # print(metaData)
         metaDataDict = self.getMetaDataDict(metaData)
         path = f'{self.savePath}/{metaDataDict["title"]}.mp3'
         audio = EasyID3(path)
@@ -120,7 +120,7 @@ class YoutubeDL():
         """Method returns metadata dict based on metadata taken form Youtube video
 
         Args:
-            metaData (str): Metadata
+            metaData (dict): Metadata
 
         Returns:
             dict: Metadata dict from YouTube
@@ -130,6 +130,69 @@ class YoutubeDL():
             if data.value in metaData:
                 metaDataDict[data.value] = metaData[data.value]
         return metaDataDict
+    
+class TerminalUsage():
+    def __init__(self, youtubeDL, videoHash, playlistHash):
+        self.youtubeDL = youtubeDL
+        self.videoHash = videoHash
+        self.playlistHash = playlistHash
+    
+    def ifLinkIsNoneDowloadConfigPlaylist(self, type):
+        if type == "mp3":
+            self.youtubeDL.downoladConfigPlaylistAudio()
+        else:
+            self.youtubeDL.downoladConfigPlaylistVideo()
+
+    def ifLinkIsNotPlaylistDowloadSingleFile(self, type):
+        if type == "mp3":
+            self.youtubeDL.downloadAudio(self.videoHash)
+        else:
+            self.youtubeDL.dowloadVideo(self.videoHash)
+
+    def ifLinkIsPlaylistDowloadIt(self, type):
+        isAudio = False
+        isPlaylist = False
+        if type == "mp3":
+            isAudio = True
+        userResponse = input("""
+        Playlist link detected. 
+        If you want to download whole playlist press 'y'
+        If you want to download single video/audio press 'n'
+        """)
+        
+        # if userResponse != "y" or userResponse != "n":
+        if userResponse not in ["y", "n"]:
+            raise ValueError("Please enter 'y' for yes or 'n' for no")
+        if userResponse == "n":
+            hashToDownload = self.videoHash
+        else:
+            hashToDownload = self.playlistHash
+            isPlaylist = True
+        if isAudio:
+            if isPlaylist:
+                youtubeDL.downloadAudio(hashToDownload, isPlaylist)
+            else:
+                youtubeDL.downloadAudio(hashToDownload)
+        else:
+            youtubeDL.dowloadVideo(hashToDownload)
+
+    @classmethod
+    def initFromLink(cls, youtubeDL, link):
+        if link == None:
+            return cls(youtubeDL, videoHash=None, playlistHash=None)
+        onlyHashesInLink = link.split("?")[1]
+        if "&" not in onlyHashesInLink:
+            if "list=" in onlyHashesInLink:
+                playlistHash = onlyHashesInLink[5:]
+                return cls(youtubeDL, videoHash=None, playlistHash=playlistHash)
+            else:
+                videoHash = onlyHashesInLink[2:]
+                return cls(youtubeDL, videoHash=videoHash, playlistHash=None)
+        else:
+            splitedHashes = onlyHashesInLink.split("=")
+            videoHash = splitedHashes[1][:splitedHashes[1].index("&")]
+            playlistHash = splitedHashes[2][:splitedHashes[2].index("&")]
+            return cls(youtubeDL, videoHash=videoHash, playlistHash=playlistHash)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser("Program downloads mp3 form given youtube URL")
@@ -144,47 +207,24 @@ if __name__ == "__main__":
     type = args.type
     config= args.config
     youtubeDL = YoutubeDL(config, type)
+    terminalUser = TerminalUsage.initFromLink(youtubeDL, link)
     if link == None:
-        if type == "mp3":
-            youtubeDL.downoladConfigPlaylistAudio()
-        else:
-            youtubeDL.downoladConfigPlaylistVideo()
-        sys.exit()
-    splitedLink = link.split("=")
-    videoHash = splitedLink[1]
-    if "list=" not in link:
-        if type == "mp3":
-            youtubeDL.downloadAudio(videoHash)
-        else:
-            youtubeDL.dowloadVideo(videoHash)
+        terminalUser.ifLinkIsNoneDowloadConfigPlaylist(type)
+    elif "list=" not in link:
+        terminalUser.ifLinkIsNotPlaylistDowloadSingleFile(type)
     elif "list=" in link:
-        videoHash = videoHash[:videoHash.index("&")]
-        playlistHash = splitedLink[2][:splitedLink[2].index("&")]
-        playlistInput = input("""
-        Playlist link detected. 
-        If you want to download whole playlist press 'y'
-        If you want to download single video/audio press 'n'
-        """)
-        while True:
-            if playlistInput == "y" or playlistInput == "n":
-                break
-            else:
-                playlistInput = input("""
-            WRONG VALUE
-            Press 'y' to downolad playlist or 'no' to download single video/audio
-                """)
-        if playlistInput == "n":
-            hashToDownload = videoHash
-        else:
-            hashToDownload = playlistHash
-        if type == "mp3":
-            youtubeDL.downloadAudio(hashToDownload)
-        else:
-            youtubeDL.dowloadVideo(hashToDownload)
+        terminalUser.ifLinkIsPlaylistDowloadIt(type)
+
+# https://www.youtube.com/watch?v=_EZUfnMv3Lg&list=PLAz00b-z3I5Um0R1_XqkbiqqkB0526jxO&index=2
+# https://www.youtube.com/watch?v=_EZUfnMv3Lg
+# https://www.youtube.com/playlist?list=PLAz00b-z3I5Um0R1_XqkbiqqkB0526jxO
+
+# sprawdzić ile jest znaków równa się żeby nie rozdrabniać się na długie if statemanty
+# najpierw splitować zapytania znaki, potem & a potem równa się a 
+# zamiast while to wywalić błąd 
+# trucknumber dodać do Enum i weryfikować w loopie
+# dodać kolejną metode w której ustawiam metadaa setmetadataForPlaylist i setMetaDataForSingleFile
 
 
-# zrobić walidace linków w maine, splitować link i odpalać odpowiednio pobieranie playlisty albo jednego utworu, tylko po haszu video ściągać nie po całym linku, jeśli link jest nie prawidłowy to wywalić
-# komunikat z błędem
-# jeśli jest v= to pobiera jeden plik
-# jeśli jest lista i watch to można zapytanie zrobi, typu co mam zrobić pobtać wideo jedno czy playliste
+
 # może być tak że kilka stron może mieć to samo IP ale musi mieć wtedy różny port, IP + port musi być unikatowy, IP odności się do urządzenia a na jednym urządzniu możę być więcej serwerów o róznych portach
