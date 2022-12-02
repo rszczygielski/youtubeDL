@@ -2,7 +2,7 @@ import yt_dlp
 import configparser
 import argparse
 import sys
-from enum import Enum
+from enum import Enum, auto
 from mutagen.easyid3 import EasyID3
 from mutagen.mp3 import MP3
 
@@ -11,7 +11,6 @@ class MetaDataType(Enum):
     ALBUM = 'album'
     ARTIST = 'artist'
     PLAYLIST_INDEX = 'playlist_index'
-
 
 class YoutubeDL():
     def __init__(self, configFilePath, type):
@@ -87,38 +86,54 @@ class YoutubeDL():
             self.setMetaDataPlaylist(metaData)
 
     def setMetaDataSingleFile(self, metaData):
+        """Method used to set meta data for the single file
+
+        Args:
+            metaData (class): Metadata
+        """
         metaDataDict = self.getMetaDataDict(metaData)
         path = f'{self.savePath}/{metaDataDict["title"]}.mp3'
-        self.saveMetaDataToSingleFile(metaDataDict, path)
+        self.saveMetaData(metaDataDict, path)
+        self.showMetaDataInfo(path)
+
     
     def setMetaDataPlaylist(self, metaData):
+        """Method used to set Metadata for playlist
+
+        Args:
+            metaData (class): Metadata
+        """
         playlistName = metaData["title"]
         for trackMetaData in metaData['entries']:
             metaDataDict = self.getMetaDataDict(trackMetaData)
             path = f'{self.savePath}/{metaDataDict["title"]}.mp3'
-            self.saveMataDataToPlaylist(metaDataDict, path, playlistName, trackMetaData)
-            
-    def saveMetaDataToSingleFile(self, metaDataDict, path):
+            self.saveMetaData(metaDataDict, path)
+            audio = EasyID3(path)
+            audio['album'] = playlistName
+            audio.save()
+            self.showMetaDataInfo(path)
+
+    def saveMetaData(self, metaDataDict, path):
+        """Method used to set Metadata
+
+        Args:
+            metaDataDict (dict): Metadata dict  
+            path (str): file path
+        """
         audio = EasyID3(path)
-        print(metaDataDict)
         for data in metaDataDict:
             if data == "playlist_index":
                 audio['tracknumber'] = str(metaDataDict[data])
                 continue
             audio[data] = metaDataDict[data]
         audio.save()
-        audioInfo = MP3(path, ID3=EasyID3)
-        print(audioInfo.pprint())
     
-    def saveMataDataToPlaylist(self, metaDataDict, path, playlistName, trackMetaData):
-        audio = EasyID3(path)
-        for data in metaDataDict:
-            if data == "playlist_index":
-                audio['tracknumber'] = str(metaDataDict[data])
-                continue
-            audio[data] = metaDataDict[data]
-        audio['album'] = playlistName
-        audio.save()
+    def showMetaDataInfo(self, path):
+        """Method used to show Metadata info
+
+        Args:
+            path (str): file path
+        """
         audioInfo = MP3(path, ID3=EasyID3)
         print(audioInfo.pprint())
 
@@ -126,7 +141,7 @@ class YoutubeDL():
         """Method returns metadata dict based on metadata taken form Youtube video
 
         Args:
-            metaData (dict): Metadata
+            metaData (dict): Metadata dict
 
         Returns:
             dict: Metadata dict from YouTube
@@ -137,23 +152,23 @@ class YoutubeDL():
                 metaDataDict[data.value] = metaData[data.value]
         return metaDataDict
     
-class TerminalUsage():
-    def __init__(self, youtubeDL, videoHash, playlistHash):
-        self.youtubeDL = youtubeDL
+class ExaminateURL(YoutubeDL):
+    def __init__(self,config, type, videoHash, playlistHash):
+        super().__init__(config, type)
         self.videoHash = videoHash
         self.playlistHash = playlistHash
     
     def ifLinkIsNoneDowloadConfigPlaylist(self, type):
         if type == "mp3":
-            self.youtubeDL.downoladConfigPlaylistAudio()
+            self.downoladConfigPlaylistAudio()
         else:
-            self.youtubeDL.downoladConfigPlaylistVideo()
+            self.downoladConfigPlaylistVideo()
 
     def ifLinkIsNotPlaylistDowloadSingleFile(self, type):
         if type == "mp3":
-            self.youtubeDL.downloadAudio(self.videoHash)
+            self.downloadAudio(self.videoHash)
         else:
-            self.youtubeDL.dowloadVideo(self.videoHash)
+            self.dowloadVideo(self.videoHash)
 
     def ifLinkIsPlaylistDowloadIt(self, type):
         isAudio = False
@@ -165,40 +180,40 @@ class TerminalUsage():
         If you want to download whole playlist press 'y'
         If you want to download single video/audio press 'n'
         """)
-        if userResponse not in ["y", "n"]:
-            raise ValueError("Please enter 'y' for yes or 'n' for no")
         if userResponse == "n":
             hashToDownload = self.videoHash
-        else:
+        elif userResponse == "y":
             hashToDownload = self.playlistHash
             isPlaylist = True
+        else:
+            raise ValueError("Please enter 'y' for yes or 'n' for no")
         if isAudio:
             if isPlaylist:
-                youtubeDL.downloadAudio(hashToDownload, isPlaylist)
+                self.downloadAudio(hashToDownload, isPlaylist)
             else:
-                youtubeDL.downloadAudio(hashToDownload)
+                self.downloadAudio(hashToDownload)
         else:
-            youtubeDL.dowloadVideo(hashToDownload)
-    
+            self.dowloadVideo(hashToDownload)
 
     @classmethod
-    def initFromLink(cls, youtubeDL, link):
+    def initFromLink(cls, config, type, link):
         if link == None:
-            return cls(youtubeDL, videoHash=None, playlistHash=None)
+            return cls(config, type, videoHash=None, playlistHash=None)
         onlyHashesInLink = link.split("?")[1]
         numberOfEqualSign = link.count("=")
         if numberOfEqualSign >= 2:
             splitedHashes = onlyHashesInLink.split("=")
             videoHash = splitedHashes[1][:splitedHashes[1].index("&")]
             playlistHash = splitedHashes[2][:splitedHashes[2].index("&")]
-            return cls(youtubeDL, videoHash=videoHash, playlistHash=playlistHash)
+            return cls(config, type, videoHash=videoHash, playlistHash=playlistHash)
         elif numberOfEqualSign == 1:
             if "list=" in onlyHashesInLink:
                 playlistHash = onlyHashesInLink[5:]
-                return cls(youtubeDL, videoHash=None, playlistHash=playlistHash)
+                return cls(config, type, videoHash=None, playlistHash=playlistHash)
             else:
                 videoHash = onlyHashesInLink[2:]
-                return cls(youtubeDL, videoHash=videoHash, playlistHash=None)
+                return cls(config, type, videoHash=videoHash, playlistHash=None)
+     
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser("Program downloads mp3 form given youtube URL")
@@ -212,8 +227,10 @@ if __name__ == "__main__":
     link = args.link
     type = args.type
     config= args.config
-    youtubeDL = YoutubeDL(config, type)
-    terminalUser = TerminalUsage.initFromLink(youtubeDL, link)
+    # youtubeDL = YoutubeDL(config, type)
+    # terminalUser = ExaminateURL.initFromLink(youtubeDL, link)
+    terminalUser = ExaminateURL.initFromLink(config, type, link)
+
     if link == None:
         terminalUser.ifLinkIsNoneDowloadConfigPlaylist(type)
     elif "list=" not in link:
@@ -231,6 +248,6 @@ if __name__ == "__main__":
 # trucknumber dodać do Enum i weryfikować w loopie DONE
 # dodać kolejną metode w której ustawiam metadaa setmetadataForPlaylist i setMetaDataForSingleFile DONE
 
+# DODAŁEM DZIDZICZENIE W EXAMINEURL
 
 
-# może być tak że kilka stron może mieć to samo IP ale musi mieć wtedy różny port, IP + port musi być unikatowy, IP odności się do urządzenia a na jednym urządzniu możę być więcej serwerów o róznych portach
