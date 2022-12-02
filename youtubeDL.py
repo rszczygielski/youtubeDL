@@ -22,7 +22,7 @@ class YoutubeDL():
             self.playlistList.append(config["playlists"][key])
         self.ydl_video_opts = {
         'format': f'bestvideo[height={type}][ext=mp4]+bestaudio/bestvideo+bestaudio',
-        # 'download_archive': 'downloaded_songs.txt',
+        'download_archive': 'downloaded_songs.txt',
         'outtmpl':  self.savePath + '/%(title)s' + f'_{type}p' + '.%(ext)s',
         }
         self.ydl_audio_opts = {
@@ -32,7 +32,7 @@ class YoutubeDL():
                             'preferredcodec': 'mp3',
                             'preferredquality': '192',
                         }],
-        # 'download_archive': 'downloaded_songs.txt',
+        'download_archive': 'downloaded_songs.txt',
         'outtmpl':  self.savePath + '/%(title)s.%(ext)s',
         }
     
@@ -197,6 +197,16 @@ class ExaminateURL(YoutubeDL):
 
     @classmethod
     def initFromLink(cls, config, type, link):
+        """Class method which initialize the class from HTTP link string
+
+        Args:
+            config (str): config path 
+            type (str): type of video quality
+            link (str): HTTP link
+
+        Returns:
+            class: instance of ExaminateURL class
+        """
         if link == None:
             return cls(config, type, videoHash=None, playlistHash=None)
         onlyHashesInLink = link.split("?")[1]
@@ -227,8 +237,6 @@ if __name__ == "__main__":
     link = args.link
     type = args.type
     config= args.config
-    # youtubeDL = YoutubeDL(config, type)
-    # terminalUser = ExaminateURL.initFromLink(youtubeDL, link)
     terminalUser = ExaminateURL.initFromLink(config, type, link)
 
     if link == None:
@@ -237,17 +245,3 @@ if __name__ == "__main__":
         terminalUser.ifLinkIsNotPlaylistDowloadSingleFile(type)
     elif "list=" in link:
         terminalUser.ifLinkIsPlaylistDowloadIt(type)
-
-# https://www.youtube.com/watch?v=_EZUfnMv3Lg&list=PLAz00b-z3I5Um0R1_XqkbiqqkB0526jxO&index=2
-# https://www.youtube.com/watch?v=_EZUfnMv3Lg
-# https://www.youtube.com/playlist?list=PLAz00b-z3I5Um0R1_XqkbiqqkB0526jxO
-
-# sprawdzić ile jest znaków równa się żeby nie rozdrabniać się na długie if statemanty
-# najpierw splitować zapytania znaki, potem & a potem równa się a 
-# zamiast while to wywalić błąd DONE
-# trucknumber dodać do Enum i weryfikować w loopie DONE
-# dodać kolejną metode w której ustawiam metadaa setmetadataForPlaylist i setMetaDataForSingleFile DONE
-
-# DODAŁEM DZIDZICZENIE W EXAMINEURL
-
-
